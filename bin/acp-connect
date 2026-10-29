@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# One ACP connection in a new container that mounts the folder this is started from (the ACP client starts agents in
+# the open VS Code folder) at the same path, and is removed on disconnect. Usage: acp-connect <service>
+set -euo pipefail
+here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+svc=${1:?usage: acp-connect <service>}
+dir=$(pwd -P)
+# No folder open: the client falls back to its own cwd. Never mount a home folder or the root as the workspace.
+case "$dir" in
+  /|/home|/root|"$HOME")
+    dir="${ACP_DEFAULT_DIR:-$HOME/workarea/tmp}"
+    echo "acp-connect: no project folder open; using $dir" >&2 ;;
+esac
+# WORKSPACE in the environment overrides .env, so compose mounts this folder and tells acp-run about it.
+export WORKSPACE="$dir"
+exec docker compose --project-directory "$here" -f "$here/compose.yaml" run --rm -T --no-deps --quiet-pull "$svc" acp-run

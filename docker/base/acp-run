@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# One ACP connection: a throwaway home, the agent's setup, then the agent's ACP command on this stdio.
+# Usage (from the client): docker exec -i acp-<agent> acp-run
+set -euo pipefail
+
+: "${ACP_AGENT:?ACP_AGENT is not set in this image}"
+setup=/etc/acp/setup.sh
+[ -r "$setup" ] || { echo "acp-run: $setup missing" >&2; exit 1; }
+
+home=$(mktemp -d /tmp/acp-home.XXXXXX)
+child=
+
+cleanup() {
+  if [ -n "$child" ]; then
+    kill -TERM -- "-$child" 2>/dev/null || true
+    sleep 0.5
+    kill -KILL -- "-$child" 2>/dev/null || true
+  fi
+  rm -rf "$home"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM INT HUP
+
+export HOME="$home"
+export XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" \
+       XDG_STATE_HOME="$home/.local/state" XDG_CACHE_HOME="$home/.cache"
+mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME"
+
+# setup.sh writes the agent's config into $HOME and sets ACP_CMD.
+# shellcheck source=/dev/null
+. "$setup"
+acp_setup
+cd "${WORKSPACE:-$HOME}"
+# acp-shim maps a client cwd that isn't in this container to $WORKSPACE, and applies ACP_INITIAL_MODE if set.
+[ -n "${ACP_INITIAL_MODE:-}" ] && export ACP_INITIAL_MODE
+ACP_CMD=(acp-shim "${ACP_CMD[@]}")
+
+# Own session so cleanup can stop everything the agent started; <&0 keeps stdin (bash gives background jobs /dev/null).
+setsid "${ACP_CMD[@]}" <&0 &
+child=$!
+rc=0
+wait "$child" || rc=$?
+exit "$rc"

@@ -1,0 +1,113 @@
+name: acp
+
+# Every agent: long-running container; each `docker exec -i acp-<agent> acp-run` is one fresh ACP connection.
+x-agent: &agent
+  init: true
+  restart: unless-stopped
+  tmpfs:
+    - /tmp:exec,mode=1777,size=4g
+  environment:
+    WORKSPACE: ${WORKSPACE:-${HOME}/workarea/tmp}
+  volumes:
+    - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}
+
+x-proxy-env: &proxy-env
+  WORKSPACE: ${WORKSPACE:-${HOME}/workarea/tmp}
+  LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+  LLM_PROXY_URL: http://llm-proxy:8000
+
+services:
+  claude:
+    <<: *agent
+    image: acp-claude
+    container_name: acp-claude
+    build: { context: docker/claude, args: { BASE: acp-base } }
+    environment:
+      WORKSPACE: ${WORKSPACE:-${HOME}/workarea/tmp}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+
+  codex:
+    <<: *agent
+    image: acp-codex
+    container_name: acp-codex
+    build: { context: docker/codex, args: { BASE: acp-base } }
+    volumes:
+      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}
+      - ${HOME}/.codex:/creds/codex:ro
+
+  grok:
+    <<: *agent
+    image: acp-grok
+    container_name: acp-grok
+    build: { context: docker/grok, args: { BASE: acp-base } }
+    volumes:
+      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}
+      - ${HOME}/.grok:/creds/grok:ro
+
+  agy:
+    <<: *agent
+    image: acp-agy
+    container_name: acp-agy
+    build: { context: docker/agy, args: { BASE: acp-base } }
+    environment:
+      WORKSPACE: ${WORKSPACE:-${HOME}/workarea/tmp}
+      AGY_AUTH: subscription
+    volumes:
+      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}
+      - ${HOME}/.gemini:/creds/agy:ro
+
+  # ---- agents whose model comes from the local LiteLLM proxy (~/workarea/fox/openai-proxy) ----
+
+  claude-proxy:
+    <<: *agent
+    image: acp-claude
+    container_name: acp-claude-proxy
+    environment:
+      <<: *proxy-env
+      CLAUDE_AUTH: proxy
+      CLAUDE_PROXY_MODEL: ${CLAUDE_PROXY_MODEL:-nemotron-3-ultra}
+    networks: [default, llm-proxy]
+
+  agy-proxy:
+    <<: *agent
+    image: acp-agy
+    container_name: acp-agy-proxy
+    environment:
+      <<: *proxy-env
+      AGY_AUTH: proxy
+    networks: [default, llm-proxy]
+
+  opencode:
+    <<: *agent
+    image: acp-opencode
+    container_name: acp-opencode
+    build: { context: docker/opencode, args: { BASE: acp-base } }
+    environment:
+      <<: *proxy-env
+      OPENCODE_MODEL: ${OPENCODE_MODEL:-nemotron-3-ultra}
+    networks: [default, llm-proxy]
+
+  kilo:
+    <<: *agent
+    image: acp-kilo
+    container_name: acp-kilo
+    build: { context: docker/kilo, args: { BASE: acp-base } }
+    environment:
+      <<: *proxy-env
+      KILO_MODEL: ${KILO_MODEL:-nemotron-3-ultra}
+    networks: [default, llm-proxy]
+
+  goose:
+    <<: *agent
+    image: acp-goose
+    container_name: acp-goose
+    build: { context: docker/goose, args: { BASE: acp-base } }
+    environment:
+      <<: *proxy-env
+      GOOSE_MODEL: ${GOOSE_MODEL:-nemotron-3-ultra}
+    networks: [default, llm-proxy]
+
+networks:
+  llm-proxy:
+    name: openai-proxy_default
+    external: true
