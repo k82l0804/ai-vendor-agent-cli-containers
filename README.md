@@ -172,3 +172,8 @@ docs/SPEC.md                  design notes and per-agent findings
 - Past sessions cannot be resumed — by design.
 - Vendor agents copy their login file into each connection; if a vendor rotates refresh tokens, a long session may
   refresh a copy the host never sees (Claude avoids this with a long-lived token).
+
+## License
+
+[MIT](LICENSE). The Muse adapter (`docker/muse/muse-acp.mjs`) is built on Meta's MIT-licensed `@muse-code/sdk`; the
+agent CLIs and ACP adapters the images install at build time keep their own vendors' licenses.
