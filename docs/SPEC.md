@@ -241,3 +241,11 @@ The pattern for "subscription vs local model" is **one image, two services** tha
    `acp_teardown` in `docker/agy/setup.sh` removes `skills/` on disconnect, but only if it didn't exist when the
    connection started and holds nothing but `namespace: system` skills. While a session is open the folder is visible,
    and in a project with its own `skills/` the `system/` subfolder is left behind.
+
+## Locked profile (2026-10-28)
+
+Optional hardened profile for environments that allow only an internal model: `compose.locked.yaml`, `locked/`,
+`scripts/locked-check*.sh`, `make locked-*`. Design, controls, evidence and residual risks: [SECURITY.md](SECURITY.md).
+The per-agent setup scripts read `ACP_LOCKED=1` to deny web tools (OpenCode/Kilo `webfetch`/`websearch`, Claude Code
+`WebFetch`/`WebSearch`, Goose: only the `developer` and `todo` extensions) and to switch off OpenCode's background
+fetches.

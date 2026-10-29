@@ -1,0 +1,4 @@
+# Domains the agents may reach through the egress proxy, one per line; a leading dot includes subdomains.
+# Empty (as shipped): the proxy refuses everything. Examples for an internal package mirror:
+#   artifactory.example.corp
+#   .pypi.example.corp

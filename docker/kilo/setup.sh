@@ -2,6 +2,13 @@
 acp_setup() {
   : "${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is not set (see .env)}"
   local model="${KILO_MODEL:-nemotron-3-ultra}"
+  # Locked profile (ACP_LOCKED=1): no web tools, and none of the background fetches a closed network refuses anyway.
+  local web=allow
+  if [ "${ACP_LOCKED:-}" = 1 ]; then
+    web=deny
+    export OPENCODE_DISABLE_MODELS_FETCH=1 OPENCODE_DISABLE_LSP_DOWNLOAD=1 OPENCODE_DISABLE_DEFAULT_PLUGINS=1 \
+           OPENCODE_DISABLE_AUTOUPDATE=1
+  fi
   mkdir -p "$XDG_CONFIG_HOME/kilo"
   cat > "$XDG_CONFIG_HOME/kilo/kilo.jsonc" <<EOF
 {
@@ -17,7 +24,7 @@ acp_setup() {
     }
   },
   "model": "local/${model}",
-  "permission": { "edit": "allow", "bash": "allow", "webfetch": "allow", "external_directory": "allow" }
+  "permission": { "edit": "allow", "bash": "allow", "webfetch": "${web}", "websearch": "${web}", "external_directory": "allow" }
 }
 EOF
   ACP_CMD=(kilo acp --pure)

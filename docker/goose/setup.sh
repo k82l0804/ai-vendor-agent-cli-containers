@@ -15,5 +15,15 @@ GOOSE_MODEL: ${GOOSE_MODEL}
 GOOSE_MODE: auto
 GOOSE_TELEMETRY_ENABLED: false
 EOF
+  # Locked profile (ACP_LOCKED=1): only the developer (files, shell) and todo extensions. The others include skills
+  # with a web search (summon), apps, and an extension manager that could turn extensions back on.
+  if [ "${ACP_LOCKED:-}" = 1 ]; then
+    echo "extensions:" >> "$XDG_CONFIG_HOME/goose/config.yaml"
+    local ext on
+    for ext in developer todo analyze apps chatrecall code_execution extensionmanager javascript scheduler summarize summon tom; do
+      case $ext in developer|todo) on=true ;; *) on=false ;; esac
+      printf '  %s:\n    name: %s\n    type: platform\n    enabled: %s\n' "$ext" "$ext" "$on" >> "$XDG_CONFIG_HOME/goose/config.yaml"
+    done
+  fi
   ACP_CMD=(goose acp)
 }

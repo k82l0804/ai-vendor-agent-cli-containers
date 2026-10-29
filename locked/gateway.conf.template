@@ -1,0 +1,25 @@
+# Locked profile: the only route from the agents to a model. Agents hold no key; this gateway adds it.
+# ${LOCKED_LLM_UPSTREAM} and ${LOCKED_LLM_KEY} are filled in from the environment when nginx starts.
+log_format audit '$time_iso8601 client=$remote_addr "$request" status=$status bytes_in=$request_length bytes_out=$bytes_sent secs=$request_time';
+
+server {
+    listen 8000;
+    access_log /dev/stdout audit;
+    client_max_body_size 50m;
+
+    # Model APIs only: OpenAI-style and Anthropic-style under /v1/, Gemini-style under /v1beta/.
+    location ~ ^/(v1|v1beta)/ {
+        proxy_pass ${LOCKED_LLM_UPSTREAM};
+        # Replace whatever credential the agent sent with the real one.
+        proxy_set_header Authorization "Bearer ${LOCKED_LLM_KEY}";
+        proxy_set_header x-api-key "${LOCKED_LLM_KEY}";
+        proxy_set_header x-goog-api-key "${LOCKED_LLM_KEY}";
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;            # streamed responses
+        proxy_read_timeout 900s;
+    }
+
+    location = /gateway-health { access_log off; return 200 "ok\n"; }
+    location / { return 403 "locked gateway: model API paths only\n"; }
+}

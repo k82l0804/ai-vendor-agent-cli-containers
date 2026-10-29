@@ -1,14 +1,20 @@
 AGENTS ?= claude claude-proxy codex grok agy agy-proxy muse opencode kilo goose
+# Locked profile (optional, see docs/SECURITY.md): agents that work with only a local model gateway.
+LOCKED_AGENTS ?= opencode-locked kilo-locked goose-locked claude-locked
 A ?=
 UID := $(shell id -u)
 GID := $(shell id -g)
 COMPOSE := docker compose
+LOCKED_COMPOSE := docker compose -f compose.yaml -f compose.locked.yaml
 
-.PHONY: help base build rebuild up down restart ps logs shell smoke versions client-config prune clean
+.PHONY: help base build rebuild up down restart ps logs shell smoke versions client-config prune clean \
+	locked-build locked-up locked-down locked-check locked-smoke locked-logs locked-client-config
 
 help:
 	@echo "make build | rebuild | up | down | restart | ps | logs [A=x] | shell A=x | smoke [A=x] | versions | client-config | prune | clean"
+	@echo "locked profile: make locked-build | locked-up | locked-check | locked-smoke | locked-logs | locked-client-config | locked-down"
 	@echo "AGENTS='$(AGENTS)'"
+	@echo "LOCKED_AGENTS='$(LOCKED_AGENTS)'"
 
 base:
 	docker build --build-arg UID=$(UID) --build-arg GID=$(GID) -t acp-base docker/base
@@ -70,6 +76,39 @@ prune:
 	@n=$$(docker ps -q --filter label=com.docker.compose.project=acp --filter label=com.docker.compose.oneoff=True | wc -l); [ $$n -eq 0 ] || echo "prune: removing $$n running connection container(s); any open session in VS Code ends"
 	docker ps -aq --filter label=com.docker.compose.project=acp --filter label=com.docker.compose.oneoff=True | xargs -r docker rm -f
 
-clean: prune
+clean: prune locked-down
 	$(COMPOSE) down --rmi all --remove-orphans
 	-docker image rm acp-base
+
+# ---- Locked profile -------------------------------------------------------------------------------------------
+# Images for the locked agents (the same images as the normal profile) plus the gateway and egress proxy.
+locked-build: base
+	$(COMPOSE) build $(patsubst %-locked,%,$(LOCKED_AGENTS))
+	$(LOCKED_COMPOSE) pull llm-gateway egress
+
+# The gateway and egress proxy; agents start per connection (bin/acp-connect <name>-locked).
+locked-up:
+	@docker network inspect $${LOCKED_UPSTREAM_NETWORK:-$(PROXY_NET)} >/dev/null 2>&1 || { echo "network $${LOCKED_UPSTREAM_NETWORK:-$(PROXY_NET)} not found: start the model gateway first, or set LOCKED_UPSTREAM_NETWORK"; exit 1; }
+	$(LOCKED_COMPOSE) up -d llm-gateway egress
+
+locked-down:
+	-$(LOCKED_COMPOSE) rm -sf llm-gateway egress
+	-docker network rm acp-locked acp-egress-out 2>/dev/null
+
+# Every control, checked from inside each locked agent container; no model calls. Exit status 0 = all passed.
+locked-check: locked-up
+	scripts/locked-check.sh $(LOCKED_AGENTS)
+
+# The ACP smoke test through the locked agents (uses the model).
+locked-smoke: locked-up
+	ACP_SMOKE_VIA=connect node scripts/acp-smoke.mjs $(LOCKED_AGENTS)
+
+# Audit trail: every model call (gateway) and every outbound attempt (egress proxy).
+locked-logs:
+	@echo "== llm-gateway (model calls)"; docker logs --tail 30 acp-llm-gateway 2>&1 | grep 'client='
+	@echo "== egress (outbound attempts)"; docker logs --tail 30 acp-egress 2>&1 | grep -E 'TCP_'
+
+locked-client-config:
+	@echo '"acp.agents": {'
+	@for a in $(LOCKED_AGENTS); do echo "  \"$$a\": { \"command\": \"$(CURDIR)/bin/acp-connect\", \"args\": [\"$$a\"], \"env\": {} },"; done
+	@echo '}'

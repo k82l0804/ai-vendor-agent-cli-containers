@@ -1,0 +1,108 @@
+# Locked profile (optional). Used only together with compose.yaml:
+#   docker compose -f compose.yaml -f compose.locked.yaml ...      (bin/acp-connect does this for *-locked services)
+#
+# What it enforces, independently of any agent's own settings:
+#   - The agents sit only on `locked`, a Docker internal network: no route to the internet, the LAN or the host,
+#     and no DNS for outside names.
+#   - llm-gateway is the only way to a model. It forwards model API paths to LOCKED_LLM_UPSTREAM and adds the
+#     credential itself, so the agent containers never hold a real key. Every call is logged.
+#   - egress is the only other way out: a proxy that allows just the domains in locked/egress-allowlist.txt (none as
+#     shipped).
+#   - The agent containers drop all Linux capabilities, can't gain privileges, have a read-only root filesystem and
+#     resource limits, and see only the open folder.
+#   - The agents' own web tools are switched off (ACP_LOCKED=1 in each docker/<agent>/setup.sh).
+# See docs/SECURITY.md.
+
+x-locked-agent: &locked-agent
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 512
+  mem_limit: 4g
+  cpus: 2
+  tmpfs:
+    - /tmp:exec,mode=1777,size=2g
+  networks: [locked]
+  depends_on: [llm-gateway, egress]
+  volumes:
+    # LOCKED_WORKSPACE_MODE=ro gives the agents a read-only view of the folder (review only).
+    - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}:${LOCKED_WORKSPACE_MODE:-rw}
+
+x-locked-env: &locked-env
+  WORKSPACE: ${WORKSPACE:-${HOME}/workarea/tmp}
+  ACP_LOCKED: "1"
+  LLM_PROXY_URL: http://llm-gateway:8000
+  # A placeholder: CLIs insist on some key, and llm-gateway replaces it with the real one.
+  LITELLM_MASTER_KEY: via-llm-gateway
+  HTTP_PROXY: http://egress:3128
+  HTTPS_PROXY: http://egress:3128
+  http_proxy: http://egress:3128
+  https_proxy: http://egress:3128
+  NO_PROXY: llm-gateway,localhost,127.0.0.1
+  no_proxy: llm-gateway,localhost,127.0.0.1
+
+services:
+  llm-gateway:
+    image: nginx:1.27-alpine
+    container_name: acp-llm-gateway
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run, /etc/nginx/conf.d]
+    environment:
+      LOCKED_LLM_UPSTREAM: ${LOCKED_LLM_UPSTREAM:-http://llm-proxy:8000}
+      LOCKED_LLM_KEY: ${LOCKED_LLM_KEY:-${LITELLM_MASTER_KEY:-}}
+      NGINX_ENVSUBST_FILTER: ^LOCKED_
+    volumes:
+      - ./locked:/etc/nginx/templates:ro      # nginx renders *.template from here
+    # `locked` for the agents; `upstream` reaches the model server (here: the LiteLLM proxy's network).
+    networks: [locked, upstream]
+
+  egress:
+    image: ubuntu/squid:6.6-24.04_edge
+    container_name: acp-egress
+    restart: unless-stopped
+    command: ["-f", "/etc/squid/acp/egress-squid.conf", "-NYC"]
+    # The folder, not single files: an edited single-file bind mount can go stale.
+    volumes:
+      - ./locked:/etc/squid/acp:ro
+    networks: [locked, egress-out]
+
+  opencode-locked:
+    <<: *locked-agent
+    image: acp-opencode
+    environment:
+      <<: *locked-env
+      OPENCODE_MODEL: ${OPENCODE_MODEL:-nemotron-3-ultra}
+
+  kilo-locked:
+    <<: *locked-agent
+    image: acp-kilo
+    environment:
+      <<: *locked-env
+      KILO_MODEL: ${KILO_MODEL:-nemotron-3-ultra}
+
+  goose-locked:
+    <<: *locked-agent
+    image: acp-goose
+    environment:
+      <<: *locked-env
+      GOOSE_MODEL: ${GOOSE_MODEL:-nemotron-3-ultra}
+
+  claude-locked:
+    <<: *locked-agent
+    image: acp-claude
+    environment:
+      <<: *locked-env
+      CLAUDE_AUTH: proxy
+      CLAUDE_PROXY_MODEL: ${CLAUDE_PROXY_MODEL:-nemotron-3-ultra}
+
+networks:
+  locked:
+    name: acp-locked
+    internal: true
+  egress-out:
+    name: acp-egress-out
+  upstream:
+    name: ${LOCKED_UPSTREAM_NETWORK:-openai-proxy_default}
+    external: true

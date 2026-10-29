@@ -13,4 +13,11 @@ case "$dir" in
 esac
 # WORKSPACE in the environment overrides .env, so compose mounts this folder and tells acp-run about it.
 export WORKSPACE="$dir"
-exec docker compose --project-directory "$here" -f "$here/compose.yaml" run --rm -T --no-deps --quiet-pull "$svc" acp-run
+files=(-f "$here/compose.yaml")
+deps=(--no-deps)
+# Locked profile: add its compose file, and let compose start llm-gateway and egress if they aren't running.
+if [[ "$svc" == *-locked ]]; then
+  files+=(-f "$here/compose.locked.yaml")
+  deps=()
+fi
+exec docker compose --project-directory "$here" "${files[@]}" run --rm -T "${deps[@]}" --quiet-pull "$svc" acp-run

@@ -28,9 +28,12 @@ acp_setup() {
   cat > "$HOME/.claude.json" <<'EOF'
 { "hasCompletedOnboarding": true, "bypassPermissionsModeAccepted": true }
 EOF
-  cat > "$HOME/.claude/settings.json" <<'EOF'
+  # Locked profile (ACP_LOCKED=1): deny the web tools even in bypassPermissions mode (deny rules still apply).
+  local deny='[]'
+  [ "${ACP_LOCKED:-}" = 1 ] && deny='["WebFetch", "WebSearch"]'
+  cat > "$HOME/.claude/settings.json" <<EOF
 {
-  "permissions": { "defaultMode": "bypassPermissions" },
+  "permissions": { "defaultMode": "bypassPermissions", "deny": ${deny} },
   "autoMemoryEnabled": false,
   "cleanupPeriodDays": 1
 }
