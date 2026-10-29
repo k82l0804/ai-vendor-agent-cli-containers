@@ -12,6 +12,13 @@ model only through one approved gateway that holds the credential, and run with 
 It comes with an automated check that proves each control. See [Locked profile](#locked-profile) and
 [docs/SECURITY.md](docs/SECURITY.md).
 
+![VS Code with the ACP Client panel open: Goose running in a locked container, answering a question about this
+repository](docs/assets/ai-vendor-agent-cli-containers-vscode.png)
+
+*The ACP Client panel on the right is talking to `goose-locked` — a container with no internet access, reaching
+`nemotron-3-ultra` through the local gateway. It has read `docs/SECURITY.md` from the open folder, which is the only
+thing it can see.*
+
 ## Why not just install the agent?
 
 Installed on a workstation (as a CLI, or as an editor extension such as Kilo Code), an agent runs with all of the
