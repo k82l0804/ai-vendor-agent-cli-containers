@@ -8,6 +8,8 @@ acp_setup() {
          GOOSE_MODE=auto \
          GOOSE_DISABLE_KEYRING=1 \
          GOOSE_TELEMETRY_ENABLED=false
+  # Interpolated into the generated config below; refuse values it cannot carry.
+  case "$GOOSE_MODEL" in (*[!A-Za-z0-9._:/-]*) echo "acp-run: GOOSE_MODEL '$GOOSE_MODEL' has characters the generated config cannot carry" >&2; exit 1;; esac
   mkdir -p "$XDG_CONFIG_HOME/goose"
   cat > "$XDG_CONFIG_HOME/goose/config.yaml" <<EOF
 GOOSE_PROVIDER: openai

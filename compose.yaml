@@ -82,6 +82,27 @@ services:
       CLAUDE_PROXY_MODEL: ${CLAUDE_PROXY_MODEL:-nemotron-3-ultra}
     networks: [default, llm-proxy]
 
+  codex-proxy:
+    <<: *agent
+    image: acp-codex
+    container_name: acp-codex-proxy
+    environment:
+      <<: *proxy-env
+      CODEX_AUTH: proxy
+      CODEX_PROXY_MODEL: ${CODEX_PROXY_MODEL:-nemotron-3-ultra}
+    networks: [default, llm-proxy]
+
+  grok-proxy:
+    <<: *agent
+    image: acp-grok
+    container_name: acp-grok-proxy
+    environment:
+      <<: *proxy-env
+      GROK_AUTH: proxy
+      GROK_PROXY_MODEL: ${GROK_PROXY_MODEL:-nemotron-3-ultra}
+      GROK_PROXY_CONTEXT_WINDOW: ${GROK_PROXY_CONTEXT_WINDOW:-}
+    networks: [default, llm-proxy]
+
   agy-proxy:
     <<: *agent
     image: acp-agy

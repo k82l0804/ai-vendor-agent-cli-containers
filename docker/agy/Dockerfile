@@ -7,7 +7,7 @@ ARG REGISTRY=https://raw.githubusercontent.com/agentclientprotocol/registry/main
 RUN set -eu; \
     entry=$(curl -fsSL "$REGISTRY" | jq -c '.distribution.binary["linux-x86_64"]'); \
     url=$(echo "$entry" | jq -r .archive); sha=$(echo "$entry" | jq -r .sha256); \
-    curl -fsSL -o /tmp/agy.zip "$url"; \
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -C - -o /tmp/agy.zip "$url"; \
     echo "$sha  /tmp/agy.zip" | sha256sum -c -; \
     mkdir -p /opt/agy && unzip -q /tmp/agy.zip -d /opt/agy && rm /tmp/agy.zip; \
     chmod -R a+rX /opt/agy; find /opt/agy -maxdepth 1 -type f -exec chmod 0755 {} +; \

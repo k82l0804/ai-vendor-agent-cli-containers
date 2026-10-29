@@ -1,6 +1,6 @@
-AGENTS ?= claude claude-proxy codex grok agy agy-proxy muse opencode kilo goose
+AGENTS ?= claude claude-proxy codex codex-proxy grok grok-proxy agy agy-proxy muse opencode kilo goose
 # Locked profile (optional, see docs/SECURITY.md): agents that work with only a local model gateway.
-LOCKED_AGENTS ?= opencode-locked kilo-locked goose-locked claude-locked
+LOCKED_AGENTS ?= opencode-locked kilo-locked goose-locked claude-locked codex-locked grok-locked agy-locked
 A ?=
 UID := $(shell id -u)
 GID := $(shell id -g)

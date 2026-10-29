@@ -49,7 +49,9 @@ VS Code ── ACP Client extension
 | `claude` | `claude-agent-acp` (ACP adapter) | Anthropic, subscription token | |
 | `claude-proxy` | same image | local LiteLLM proxy (Anthropic-format route) | |
 | `codex` | `codex-acp` | OpenAI, ChatGPT login | |
+| `codex-proxy` | same image | local LiteLLM proxy (OpenAI Responses API) | |
 | `grok` | `grok agent stdio` | xAI login | |
+| `grok-proxy` | same image | local LiteLLM proxy (OpenAI chat completions) | |
 | `agy` | Google's `agy_acp_server` | Google login; starts on Gemini 4 Argon | |
 | `agy-proxy` | same image | local LiteLLM proxy (Gemini-format route) | |
 | `muse` | `docker/muse/muse-acp.mjs` (our adapter on Meta's SDK) | Meta login | Muse has no ACP mode of its own |
@@ -100,7 +102,9 @@ What it adds (details, threat model and residual risks in [docs/SECURITY.md](doc
   CPU, memory and process limits, optional read-only workspace.
 - **No web tools.** Each agent's web fetch/search tools are switched off in its configuration.
 
-Locked agents: `opencode-locked`, `kilo-locked`, `goose-locked`, `claude-locked`.
+Locked agents: `opencode-locked`, `kilo-locked`, `goose-locked`, `claude-locked`, `codex-locked`, `grok-locked`,
+`agy-locked` — the same CLIs, pointed at the gateway instead of their vendor. Muse has no local-model mode, so it
+has no locked version.
 
 ### Run it
 
@@ -120,7 +124,7 @@ make locked-down              # stop the gateway and proxy
 
 ### Verify it (for testers)
 
-1. `make locked-check` — 17 checks per agent, from inside its container: no internet by name or IP, no outside DNS,
+1. `make locked-check` — 17–18 checks per agent, from inside its container: no internet by name or IP, no outside DNS,
    the host unreachable, the proxy refusing unlisted domains, the gateway working without a key and refusing other
    paths, non-root, no capabilities, no privilege escalation, read-only root, no Docker socket, only the workspace
    mounted, a process limit, web tools denied, and the real key absent. Expected last line: `ALL CHECKS PASSED`.

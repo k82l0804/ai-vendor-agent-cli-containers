@@ -2,6 +2,8 @@
 acp_setup() {
   : "${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is not set (see .env)}"
   local model="${KILO_MODEL:-nemotron-3-ultra}"
+  # Interpolated into the generated config below; refuse values it cannot carry.
+  case "$model" in (*[!A-Za-z0-9._:/-]*) echo "acp-run: KILO_MODEL '$model' has characters the generated config cannot carry" >&2; exit 1;; esac
   # Locked profile (ACP_LOCKED=1): no web tools, and none of the background fetches a closed network refuses anyway.
   local web=allow
   if [ "${ACP_LOCKED:-}" = 1 ]; then

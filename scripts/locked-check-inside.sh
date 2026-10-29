@@ -33,11 +33,20 @@ check   "process limit set (pids.max = $(cat /sys/fs/cgroup/pids.max 2>/dev/null
 export HOME=$(mktemp -d /tmp/locked-check.XXXXXX) XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
 XDG_CONFIG_HOME=$HOME/.config XDG_DATA_HOME=$HOME/.local/share XDG_STATE_HOME=$HOME/.local/state XDG_CACHE_HOME=$HOME/.cache
 mkdir -p "$XDG_CONFIG_HOME"
-( . /etc/acp/setup.sh && acp_setup ) >/dev/null 2>&1
+# The subshell prints what acp_setup leaves in variables rather than files (agy's session options).
+session_meta=$( { . /etc/acp/setup.sh && acp_setup; } >/dev/null 2>&1; printf '%s' "${ACP_SESSION_META:-}" )
 case "${ACP_AGENT:-}" in
   opencode) check "web tools denied in opencode.json"  grep -q '"webfetch": "deny", "websearch": "deny"' "$XDG_CONFIG_HOME/opencode/opencode.json" ;;
   kilo)     check "web tools denied in kilo.jsonc"     grep -q '"webfetch": "deny", "websearch": "deny"' "$XDG_CONFIG_HOME/kilo/kilo.jsonc" ;;
   claude)   check "web tools denied in settings.json"  grep -q '"deny": \["WebFetch", "WebSearch"\]' "$HOME/.claude/settings.json" ;;
+  codex)    check "web search disabled in codex config.toml" grep -q '^web_search = "disabled"' "$HOME/.codex/config.toml" ;;
+  grok)     check "web tools denied in grok config.toml" grep -q '^deny = \["WebFetch", "WebSearch"\]' "$HOME/.grok/config.toml"
+            check "grok web search and backend tools off" sh -c "grep -q '^disable_web_search = true' '$HOME/.grok/config.toml' && grep -q '^backend_tools = false' '$HOME/.grok/config.toml'" ;;
+  agy)      if printf '%s' "$session_meta" | grep -qF '"disabledTools":["search_web","read_url_content"]'; then
+              ok "agy sessions request search_web and read_url_content disabled"
+            else
+              bad "agy sessions request search_web and read_url_content disabled"
+            fi ;;
   goose)    check "goose extensions limited to developer and todo"   test "$(grep -B3 'enabled: true' "$XDG_CONFIG_HOME/goose/config.yaml" | grep -o 'name: [a-z_]*' | tr '\n' ' ')" = "name: developer name: todo " ;;
 esac
 rm -rf "$HOME"

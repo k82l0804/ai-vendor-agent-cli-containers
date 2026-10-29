@@ -97,6 +97,30 @@ services:
       CLAUDE_AUTH: proxy
       CLAUDE_PROXY_MODEL: ${CLAUDE_PROXY_MODEL:-nemotron-3-ultra}
 
+  codex-locked:
+    <<: *locked-agent
+    image: acp-codex
+    environment:
+      <<: *locked-env
+      CODEX_AUTH: proxy
+      CODEX_PROXY_MODEL: ${CODEX_PROXY_MODEL:-nemotron-3-ultra}
+
+  grok-locked:
+    <<: *locked-agent
+    image: acp-grok
+    environment:
+      <<: *locked-env
+      GROK_AUTH: proxy
+      GROK_PROXY_MODEL: ${GROK_PROXY_MODEL:-nemotron-3-ultra}
+      GROK_PROXY_CONTEXT_WINDOW: ${GROK_PROXY_CONTEXT_WINDOW:-}
+
+  agy-locked:
+    <<: *locked-agent
+    image: acp-agy
+    environment:
+      <<: *locked-env
+      AGY_AUTH: proxy
+
 networks:
   locked:
     name: acp-locked

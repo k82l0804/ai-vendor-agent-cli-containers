@@ -22,6 +22,10 @@ acp_setup() {
   esac
   # New sessions always start in mode "default"; no setting changes that, so acp-shim switches to yolo.
   ACP_INITIAL_MODE=yolo
+  # Locked profile (ACP_LOCKED=1): the server only takes a tool denylist from the client, so acp-shim sends it.
+  if [ "${ACP_LOCKED:-}" = 1 ]; then
+    ACP_SESSION_META='{"antigravity":{"disabledTools":["search_web","read_url_content"]}}'
+  fi
   # The harness writes its built-in skills to <session cwd>/skills/system before each turn, and nothing configures
   # that. Note whether the workspace had a skills folder, so acp_teardown removes only what agy left.
   [ -e "${WORKSPACE:-/nonexistent}/skills" ] && AGY_SKILLS_EXISTED=yes || AGY_SKILLS_EXISTED=no

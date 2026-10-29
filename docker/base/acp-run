@@ -33,8 +33,11 @@ mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME"
 . "$setup"
 acp_setup
 cd "${WORKSPACE:-$HOME}"
-# acp-shim maps a client cwd that isn't in this container to $WORKSPACE, and applies ACP_INITIAL_MODE if set.
+# acp-shim maps a client cwd that isn't in this container to $WORKSPACE, and applies ACP_INITIAL_MODE,
+# ACP_SESSION_META and ACP_DROP_MESSAGE if set.
 [ -n "${ACP_INITIAL_MODE:-}" ] && export ACP_INITIAL_MODE
+[ -n "${ACP_SESSION_META:-}" ] && export ACP_SESSION_META
+[ -n "${ACP_DROP_MESSAGE:-}" ] && export ACP_DROP_MESSAGE
 ACP_CMD=(acp-shim "${ACP_CMD[@]}")
 
 # Own session so cleanup can stop everything the agent started; <&0 keeps stdin (bash gives background jobs /dev/null).

@@ -81,7 +81,7 @@ Every control below is enforced outside the agent. "Check" names the line printe
 | 7 | Least privilege in the container | Non-root user matching the developer's UID, `cap_drop: [ALL]`, `no-new-privileges`, read-only root, no Docker socket | `compose.locked.yaml` → `x-locked-agent` | *runs as a non-root user*, *no Linux capabilities*, *cannot gain privileges*, *root filesystem is read-only*, *no Docker socket* |
 | 8 | Resource limits | `pids_limit: 512`, `mem_limit: 4g`, `cpus: 2` | `compose.locked.yaml` | *process limit set* |
 | 9 | Only the open folder is visible | One bind mount, at the same path; parent folders are empty; optional read-only (`LOCKED_WORKSPACE_MODE=ro`) | `compose.locked.yaml`, `bin/acp-connect` | *only the workspace is mounted from the host* |
-| 10 | Agent web tools removed | With `ACP_LOCKED=1` each agent's generated config denies its web tools (OpenCode/Kilo `webfetch`/`websearch: deny`; Claude Code `permissions.deny: [WebFetch, WebSearch]`; Goose keeps only its `developer` and `todo` extensions and disables the rest, including `summon`, `apps` and `extensionmanager`) | `docker/<agent>/setup.sh` | *web tools denied in …*, *goose extensions limited to developer and todo* |
+| 10 | Agent web tools removed | With `ACP_LOCKED=1` each agent's generated config denies its web tools (OpenCode/Kilo `webfetch`/`websearch: deny`; Claude Code `permissions.deny: [WebFetch, WebSearch]`; Codex `web_search = "disabled"`; Grok `disable_web_search`, `features.backend_tools = false` and `permission.deny: [WebFetch, WebSearch]`; Antigravity: `acp-shim` sends the server's own tool denylist (`_meta.antigravity.disabledTools: [search_web, read_url_content]`) on every new session; Goose keeps only its `developer` and `todo` extensions and disables the rest, including `summon`, `apps` and `extensionmanager`) | `docker/<agent>/setup.sh`, `docker/base/acp-shim.mjs` | *web tools denied in …*, *web search disabled in codex config.toml*, *grok web search and backend tools off*, *agy sessions request search_web and read_url_content disabled*, *goose extensions limited to developer and todo* |
 | 11 | No persistent state | `acp-run` creates a new home in a tmpfs for each connection and deletes it on exit; `acp-connect` runs each connection in a new container (`docker compose run --rm`) | `docker/base/acp-run`, `bin/acp-connect` | — |
 | 12 | No editor-side network listener | The editor starts `bin/acp-connect` and speaks ACP over its stdin/stdout | `bin/acp-connect` | — |
 
@@ -100,8 +100,9 @@ were all refused by the egress proxy. Every agent still worked normally.
 | `models.dev:443`, `models.opencode.ai:443` | model catalogue download | OpenCode, Kilo |
 | `registry.npmjs.org:443` | runtime package download | OpenCode, Kilo |
 
-Asked to "use your web fetch tool to fetch https://example.com", the locked OpenCode, Kilo and Claude Code agents
-each replied that they have no web fetch tool. Goose has no web tool in the locked profile, but it ships a built-in
+Asked to "use your web fetch tool to fetch https://example.com", the locked OpenCode, Kilo, Claude Code, Codex,
+Grok and Antigravity agents each replied that they have no web fetch tool. (Before its tool denylist was in place,
+Antigravity *did* call its `read_url_content` tool; the egress proxy refused it with a 403.) Goose has no web tool in the locked profile, but it ships a built-in
 `web-search` *skill* that tells the model to use `curl` in the shell; it loaded that skill, tried `curl` and `wget`
 four times, and every attempt was refused by the egress proxy (`TCP_DENIED/403 CONNECT example.com:443`). This is
 the case the network controls exist for: an agent that finds another way.
@@ -165,9 +166,17 @@ Connect to a `*-locked` agent in the ACP Client, then try to break out:
 | `LOCKED_WORKSPACE_MODE` | `rw` (default) or `ro` for review-only use. |
 | `locked/egress-allowlist.txt` | Domains the agents may reach, e.g. an internal package mirror. Empty = none. |
 
-Agents in the locked profile today: OpenCode, Kilo Code, Goose and Claude Code (through an Anthropic-compatible
-gateway such as LiteLLM). Agents that only work with their vendor's cloud (Claude Code on a subscription, Codex, Grok,
-Antigravity, Muse) are not part of the locked profile by design.
+Agents in the locked profile today, all pointed at `llm-gateway` and never at their vendor:
+
+| Locked agent | Talks to the gateway as |
+|--------------|-------------------------|
+| `opencode-locked`, `kilo-locked`, `goose-locked`, `grok-locked` | OpenAI chat completions |
+| `codex-locked` | OpenAI Responses API |
+| `claude-locked` | Anthropic Messages (`/v1/messages`) — needs a gateway that serves it, such as LiteLLM |
+| `agy-locked` | Gemini `generateContent` (`/v1beta/…`); the gateway maps Antigravity's Gemini model names to a local model |
+
+Muse has no local-model mode and is not part of the locked profile. The subscription versions of the other agents
+(`claude`, `codex`, `grok`, `agy`) need their vendor's cloud and exist only in the normal profile.
 
 ## Residual risks
 
@@ -182,6 +191,7 @@ Antigravity, Muse) are not part of the locked profile by design.
 | **The editor extension itself** | The ACP Client extension runs on the host with the user's rights and sends usage telemetry; set `telemetry.telemetryLevel` to `off` and treat it like any other extension. |
 | **Docker Desktop specifics** | Behaviour was verified on Docker Desktop with WSL 2. `host.docker.internal` and the host's published ports were unreachable from the internal network; re-run `make locked-check` on each platform you support. |
 | **Shell is a general-purpose tool** | Every agent can run `curl`, `python` or `node`. Tool-level settings cannot stop that; the network controls (1–5) do. |
+| **`acp-shim` edits the protocol stream** | For Antigravity it adds the tool denylist to session requests; for Codex on a proxy model it drops or trims one known warning ("Model metadata … not found") from the first message chunk of a turn, never from later output. Both are listed in `docker/base/acp-shim.mjs`; nothing else is changed. |
 | **Configuration-level controls** (control 10) | Enforced by the agent. If a future agent version renames a setting, the network still blocks the traffic; `make locked-check` will show the config check failing. |
 
 ## Files

@@ -249,3 +249,10 @@ Optional hardened profile for environments that allow only an internal model: `c
 The per-agent setup scripts read `ACP_LOCKED=1` to deny web tools (OpenCode/Kilo `webfetch`/`websearch`, Claude Code
 `WebFetch`/`WebSearch`, Goose: only the `developer` and `todo` extensions) and to switch off OpenCode's background
 fetches.
+
+Later the same day `codex-locked`, `grok-locked` and `agy-locked` were added, with `codex-proxy` and `grok-proxy` in the
+normal profile: `CODEX_AUTH=proxy` (a `model_providers` entry, `wire_api = "responses"`; Codex has no catalog entry for
+the model and warns every turn, which `acp-shim` drops via `ACP_DROP_MESSAGE` — a catalog entry would have to replace
+Codex's whole system prompt), `GROK_AUTH=proxy` (a `[model.*]` entry, `api_backend = "chat_completions"`), and
+`agy-locked` reusing agy-proxy's Gemini route. Antigravity's web tools can only be disabled by the client, so
+`acp-shim` gained `ACP_SESSION_META` to send `_meta.antigravity.disabledTools`.
