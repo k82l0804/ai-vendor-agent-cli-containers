@@ -52,9 +52,23 @@ services:
     environment:
       WORKSPACE: ${WORKSPACE:-${HOME}/workarea/tmp}
       AGY_AUTH: subscription
+      # The server's own default on a Google sign-in is gemini-3.8-flash-high.
+      AGY_ACP_DEFAULT_MODEL: ${AGY_MODEL:-gemini-4-argon-high}
     volumes:
       - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}
       - ${HOME}/.gemini:/creds/agy:ro
+
+  muse:
+    <<: *agent
+    image: acp-muse
+    container_name: acp-muse
+    build: { context: docker/muse, args: { BASE: acp-base } }
+    environment:
+      WORKSPACE: ${WORKSPACE:-${HOME}/workarea/tmp}
+      MUSE_MODEL: ${MUSE_MODEL:-}
+    volumes:
+      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}
+      - ${HOME}/.config/muse:/creds/muse:ro
 
   # ---- agents whose model comes from the local LiteLLM proxy (~/workarea/fox/openai-proxy) ----
 

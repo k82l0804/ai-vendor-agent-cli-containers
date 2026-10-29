@@ -96,8 +96,14 @@ The flags and config keys still need confirming against the installed versions i
 | goose | goose installer | `goose acp` | none: `GOOSE_PROVIDER=openai`, `OPENAI_HOST=http://llm-proxy:8000`, `OPENAI_API_KEY=$LITELLM_MASTER_KEY`, `GOOSE_MODEL`, keyring disabled | `GOOSE_MODE=auto` | fresh session DB |
 | agy, agy-proxy | Google `agy-acp-server`, latest from the ACP registry (SHA-256 checked; ~1 GB unpacked) | `agy_acp_server.par --uid=` | `agy`: `~/.gemini/antigravity-acp/acp_token.json` + `settings.json` `auth.type=oauth-personal`. `agy-proxy`: `auth.type=gemini-api-key`, `GEMINI_API_KEY=$LITELLM_MASTER_KEY`, `GOOGLE_GEMINI_BASE_URL=http://llm-proxy:8000` | new sessions always start in `default`, and no flag, env var or setting changes that (the server takes only `--debug`/`--notices`; `--dangerously-skip-permissions` belongs to the `agy` CLI). `acp-mode-shim` sends `session/set_mode yolo` after each `session/new` (`ACP_INITIAL_MODE=yolo`) | experimental; biggest image |
 
-Left out of v1: **muse** (has no ACP; needs grok-build-vscode's custom adapter), **copilot**, **gemini** (dropped, see
-Phase 0 results).
+| muse | Meta's installer (launcher + binary in `/opt/muse`, `MUSE_NO_AUTO_UPDATE=1`) + our adapter `docker/muse/muse-acp.mjs` on `@muse-code/sdk` (MIT, same version as the CLI) | `node /opt/muse-acp/muse-acp.mjs`, which runs `muse serve --provider meta --disable-sandbox --trust-workspace --no-session-log --contributor-mode off` | `~/.config/muse/auth.json` | sessions start in approval mode `allowAll`; any approval Muse still asks for gets its first allowing choice | `--no-session-log` (memory-only sessions); model from `MUSE_MODEL`, else Muse's default |
+
+Muse has no ACP mode, only its own MSP. grok-build-vscode has an adapter, but it is FSL-licensed (no competing use),
+so this repo has its own minimal one: hand-written ACP JSON-RPC on one side, Meta's SDK on the other. It covers
+`initialize`, `session/new`, `session/prompt` (text, reasoning and tool calls streamed) and `session/cancel`
+(`turn/cancel`). Not supported: loading or listing past sessions, images, mode or model switching from the client.
+
+Left out: **copilot**, **gemini** (dropped, see Phase 0 results).
 
 ### Models: vendor or local proxy
 
@@ -197,11 +203,12 @@ shell running as `agent` in the workspace, and the connection's home removed aft
 | claude-proxy | 6 s | LiteLLM `/v1/messages`, `nemotron-3-ultra` | same image |
 | codex | 23 s | ChatGPT login (`auth.json`) | codex-acp 2.3.0 |
 | grok | 11 s | xAI login (`auth.json`) | grok 1.0.70 |
-| agy | 11 s | Google AI Ultra login (`acp_token.json`) | agy-acp-server 1.4.4 |
+| agy | 11 s | Google AI Ultra login (`acp_token.json`); starts on `gemini-4-argon-high` (`AGY_MODEL`; the server's own default is `gemini-3.8-flash-high`, which gave noticeably terser answers) | agy-acp-server 1.4.4 |
 | agy-proxy | 7 s | LiteLLM Gemini route, alias → `nemotron-3-ultra` | same image |
 | opencode | 9 s | LiteLLM, `nemotron-3-ultra` | opencode 1.19.5 |
 | kilo | 9 s | LiteLLM, `nemotron-3-ultra` | kilo 7.8.18 |
 | goose | 5 s | LiteLLM, `nemotron-3-ultra` | goose 1.57.0 |
+| muse | 21 s | Meta login (`auth.json`), Muse's default model | Muse Code 1.4.14, muse-acp 0.1.0 (cancel tested: a 120 s command stopped at 12 s) |
 
 The pattern for "subscription vs local model" is **one image, two services** that differ only in environment
 (`CLAUDE_AUTH`, `AGY_AUTH`). codex and grok can get a `-proxy` service the same way when needed.
@@ -226,3 +233,8 @@ The pattern for "subscription vs local model" is **one image, two services** tha
 7. **Agents can read the proxy key.** In the proxy-backed services `LITELLM_MASTER_KEY` is in the agent's environment
    or config, so any command an agent runs can read it. That's acceptable on this machine; a LiteLLM virtual key
    limited to a budget or to certain models would contain it.
+8. **agy writes into the workspace.** Its harness puts its built-in skills in `<session folder>/skills/system/` before
+   each turn; nothing configures that path (the server already moved its `brain/` out of the repo for the same reason).
+   `acp_teardown` in `docker/agy/setup.sh` removes `skills/` on disconnect, but only if it didn't exist when the
+   connection started and holds nothing but `namespace: system` skills. While a session is open the folder is visible,
+   and in a project with its own `skills/` the `system/` subfolder is left behind.

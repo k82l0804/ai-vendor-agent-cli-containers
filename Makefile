@@ -1,4 +1,4 @@
-AGENTS ?= claude claude-proxy codex grok agy agy-proxy opencode kilo goose
+AGENTS ?= claude claude-proxy codex grok agy agy-proxy muse opencode kilo goose
 A ?=
 UID := $(shell id -u)
 GID := $(shell id -g)
@@ -55,7 +55,8 @@ versions:
 	  agy) basename "$$(cat /opt/agy/SOURCE)" .zip;; \
 	  opencode) echo "opencode $$(opencode --version)";; \
 	  kilo) echo "kilo $$(kilo --version 2>/dev/null | tail -1)";; \
-	  goose) goose --version;; esac' 2>&1 | tail -1; done
+	  goose) goose --version;; \
+	  muse) echo "$$(muse --version) | muse-acp + sdk $$(cd /opt/muse-acp && npm ls --depth=0 @muse-code/sdk | grep -o "sdk@.*")";; esac' 2>&1 | tail -1; done
 
 # Each connection: a new container mounting the open VS Code folder (bin/acp-connect).
 client-config:
@@ -64,7 +65,9 @@ client-config:
 	@echo '}'
 
 # Per-connection containers left behind by a client that was killed instead of disconnecting.
+# It also ends live sessions, so disconnect in VS Code first.
 prune:
+	@n=$$(docker ps -q --filter label=com.docker.compose.project=acp --filter label=com.docker.compose.oneoff=True | wc -l); [ $$n -eq 0 ] || echo "prune: removing $$n running connection container(s); any open session in VS Code ends"
 	docker ps -aq --filter label=com.docker.compose.project=acp --filter label=com.docker.compose.oneoff=True | xargs -r docker rm -f
 
 clean: prune

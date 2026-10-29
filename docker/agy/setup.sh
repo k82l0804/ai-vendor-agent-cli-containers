@@ -22,5 +22,18 @@ acp_setup() {
   esac
   # New sessions always start in mode "default"; no setting changes that, so acp-shim switches to yolo.
   ACP_INITIAL_MODE=yolo
+  # The harness writes its built-in skills to <session cwd>/skills/system before each turn, and nothing configures
+  # that. Note whether the workspace had a skills folder, so acp_teardown removes only what agy left.
+  [ -e "${WORKSPACE:-/nonexistent}/skills" ] && AGY_SKILLS_EXISTED=yes || AGY_SKILLS_EXISTED=no
   ACP_CMD=(/opt/agy/agy_acp_server.par --uid=)
+}
+
+acp_teardown() {
+  local d="${WORKSPACE:-}/skills"
+  [ -n "${WORKSPACE:-}" ] && [ "$AGY_SKILLS_EXISTED" = no ] && [ -d "$d" ] || return 0
+  # Only skills/system/**/SKILL.md files marked `namespace: system`; anything else means it isn't ours to remove.
+  [ -z "$(find "$d" -mindepth 1 -maxdepth 1 ! -name system)" ] || return 0
+  [ -z "$(find "$d/system" -type f ! -name SKILL.md)" ] || return 0
+  [ -z "$(find "$d/system" -type f -name SKILL.md -exec grep -L '^ *namespace: system' {} +)" ] || return 0
+  rm -rf "$d"
 }

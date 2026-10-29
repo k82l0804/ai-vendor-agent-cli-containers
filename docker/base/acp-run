@@ -16,6 +16,8 @@ cleanup() {
     sleep 0.5
     kill -KILL -- "-$child" 2>/dev/null || true
   fi
+  # setup.sh may define acp_teardown to undo what its agent leaves in the workspace.
+  if declare -F acp_teardown >/dev/null; then acp_teardown || true; fi
   rm -rf "$home"
 }
 trap cleanup EXIT
