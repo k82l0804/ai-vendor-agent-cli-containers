@@ -2,7 +2,8 @@
 // Minimal ACP agent on stdio for Muse Code, which speaks only its own protocol (MSP, `muse serve`).
 // Built on Meta's MIT-licensed @muse-code/sdk; the ACP side is plain newline-delimited JSON-RPC.
 // One `muse serve` host per connection; sessions run in approval mode allowAll.
-// Handles initialize, session/new, session/prompt (streams text, reasoning and tool calls) and session/cancel.
+// Handles initialize, session/new, session/prompt (streams text, reasoning and tool calls), session/cancel, and
+// session/set_config_option for the Model and Effort pickers (Muse's model/list catalog).
 import { MuseClient, readSessionDurability, spawnMspConnection } from "@muse-code/sdk";
 import { createInterface } from "node:readline";
 
@@ -17,7 +18,10 @@ const update = (sessionId, u) => send({ method: "session/update", params: { sess
 
 let host;     // the spawned `muse serve` connection, kept for turn/cancel
 let client;
-const sessions = new Map();   // sessionId -> { session, turn?, cancelled }
+const sessions = new Map();   // sessionId -> { session, turn?, cancelled, models, modelId, effort }
+
+// Muse's closed reasoning-effort vocabulary; a model whose catalog row lists no variants takes any of them.
+const EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
 
 async function museClient(cwd) {
   if (client) return client;
@@ -33,6 +37,50 @@ function autoApprove(request) {
   const choices = request.availableChoices ?? [];
   const allow = choices.find((c) => /allow|approve|accept/i.test(JSON.stringify(c.decision ?? c.label ?? "")));
   return { choiceId: (allow ?? choices[0]).choiceId };
+}
+
+function effortsFor(model) {
+  const listed = (model?.reasoningEffortVariants ?? []).map((v) => v.tier);
+  const tiers = listed.length ? listed : EFFORTS;
+  return model?.defaultReasoningEffort && !tiers.includes(model.defaultReasoningEffort)
+    ? [...tiers, model.defaultReasoningEffort] : tiers;
+}
+
+// ACP session config options: the client draws one picker per entry and sends session/set_config_option.
+function configOptions(s) {
+  if (!s.models.length) return [];
+  const model = s.models.find((m) => m.modelId === s.modelId);
+  return [
+    { id: "model", name: "Model", type: "select", category: "model", currentValue: s.modelId,
+      options: s.models.map((m) => ({ value: m.modelId, name: m.displayLabel || m.modelId,
+        ...(m.description ? { description: m.description } : {}) })) },
+    { id: "effort", name: "Effort", type: "select", category: "thought_level", currentValue: s.effort,
+      options: effortsFor(model).map((tier) => ({ value: tier, name: tier })) },
+  ];
+}
+
+async function setConfigOption({ sessionId, configId, value }) {
+  const s = sessions.get(sessionId);
+  if (!s) throw rpcError(-32602, `unknown session ${sessionId}`);
+  if (configId === "model") {
+    const model = s.models.find((m) => m.modelId === value);
+    if (!model) throw rpcError(-32602, `unknown model ${value}`);
+    await host.connection.command("session/setModel", { sessionId,
+      model: { modelId: model.modelId, providerId: model.providerId, profileId: model.profileId } });
+    s.modelId = model.modelId;
+    // Keep the effort if the new model offers it, else move to that model's default.
+    if (!effortsFor(model).includes(s.effort) && model.defaultReasoningEffort) {
+      await host.connection.command("session/setReasoningEffort", { sessionId, reasoningEffort: model.defaultReasoningEffort });
+      s.effort = model.defaultReasoningEffort;
+    }
+  } else if (configId === "effort") {
+    if (!EFFORTS.includes(value)) throw rpcError(-32602, `unknown effort ${value}`);
+    await host.connection.command("session/setReasoningEffort", { sessionId, reasoningEffort: value });
+    s.effort = value;
+  } else {
+    throw rpcError(-32602, `unknown config option ${configId}`);
+  }
+  return { configOptions: configOptions(s) };
 }
 
 const TOOL_KINDS = [[/read|view|cat/i, "read"], [/edit|write|patch|apply/i, "edit"], [/shell|bash|exec|command/i, "execute"],
@@ -131,10 +179,21 @@ const handlers = {
     const session = await c.startSession({ workspaceRoot: cwd, approvalMode: "allowAll" });
     session.onApproval(async (request) => autoApprove(request));
     session.onApprovalError((failure) => log(`approval failed: ${failure.kind}`));
-    sessions.set(session.sessionId, { session, cancelled: false });
-    return { sessionId: session.sessionId };
+    const s = { session, cancelled: false, models: [], modelId: undefined, effort: undefined };
+    sessions.set(session.sessionId, s);
+    try {
+      const catalog = await host.connection.request("model/list", { sessionId: session.sessionId });
+      s.models = catalog.models ?? [];
+      const active = s.models.find((m) => m.isActive) ?? s.models.find((m) => m.isDefault) ?? s.models[0];
+      s.modelId = active?.modelId;
+      s.effort = active?.defaultReasoningEffort ?? "medium";
+    } catch (e) {
+      log(`model/list failed, no pickers: ${e.message}`);
+    }
+    return { sessionId: session.sessionId, configOptions: configOptions(s) };
   },
   "session/prompt": prompt,
+  "session/set_config_option": setConfigOption,
 };
 
 async function cancel({ sessionId }) {

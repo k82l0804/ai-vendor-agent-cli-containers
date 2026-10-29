@@ -100,8 +100,11 @@ The flags and config keys still need confirming against the installed versions i
 
 Muse has no ACP mode, only its own MSP. grok-build-vscode has an adapter, but it is FSL-licensed (no competing use),
 so this repo has its own minimal one: hand-written ACP JSON-RPC on one side, Meta's SDK on the other. It covers
-`initialize`, `session/new`, `session/prompt` (text, reasoning and tool calls streamed) and `session/cancel`
-(`turn/cancel`). Not supported: loading or listing past sessions, images, mode or model switching from the client.
+`initialize`, `session/new`, `session/prompt` (text, reasoning and tool calls streamed), `session/cancel` (`turn/cancel`) and
+`session/set_config_option`: Model and Effort pickers from Muse's `model/list` catalog (`session/setModel`,
+`session/setReasoningEffort`). On this account the catalog is muse-wonder-1.0 (default, effort `max`),
+muse-wonder-full-1.0, muse-spark-1.3 and muse-spark-1.2; effort is Muse's eight tiers `none`…`ultra`, or the tiers a
+model's row lists. Not supported: loading or listing past sessions, images, approval-mode switching.
 
 Left out: **copilot**, **gemini** (dropped, see Phase 0 results).
 
@@ -208,7 +211,7 @@ shell running as `agent` in the workspace, and the connection's home removed aft
 | opencode | 9 s | LiteLLM, `nemotron-3-ultra` | opencode 1.19.5 |
 | kilo | 9 s | LiteLLM, `nemotron-3-ultra` | kilo 7.8.18 |
 | goose | 5 s | LiteLLM, `nemotron-3-ultra` | goose 1.57.0 |
-| muse | 21 s | Meta login (`auth.json`), Muse's default model | Muse Code 1.4.14, muse-acp 0.1.0 (cancel tested: a 120 s command stopped at 12 s) |
+| muse | 21 s | Meta login (`auth.json`); starts on muse-wonder-1.0, effort max; Model and Effort pickers | Muse Code 1.4.14, muse-acp 0.1.0 (cancel tested: a 120 s command stopped at 12 s) |
 
 The pattern for "subscription vs local model" is **one image, two services** that differ only in environment
 (`CLAUDE_AUTH`, `AGY_AUTH`). codex and grok can get a `-proxy` service the same way when needed.
