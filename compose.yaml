@@ -144,5 +144,5 @@ services:
 
 networks:
   llm-proxy:
-    name: openai-proxy_default
+    name: ${LLM_PROXY_NETWORK:-openai-proxy_default}
     external: true
