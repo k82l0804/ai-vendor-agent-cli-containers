@@ -52,7 +52,7 @@ container acp-claude (long-running, `sleep infinity`, tini as PID 1)
     nothing refreshes.
   - **codex, grok, agy**: each CLI's host login files are mounted **read-only** into `/creds/<agent>/` and
     copied into each connection's fresh home. They are never written back.
-  - **opencode, kilo, goose**: the local LiteLLM proxy (`~/workarea/fox/openai-proxy`, container `llm-proxy`). Our services
+  - **opencode, kilo, goose**: the local LiteLLM proxy (`~/workarea/openai-proxy`, container `llm-proxy`). Our services
     join its external network `openai-proxy_default` and call `http://llm-proxy:8000/v1`. The key goes in our `.env`
     as `LITELLM_MASTER_KEY`, the same name the proxy project uses. The model comes from
     `OPENCODE_MODEL` / `KILO_MODEL` / `GOOSE_MODEL` (any `model_name` in the proxy's `litellm_config.yaml`, e.g.
@@ -116,7 +116,7 @@ Left out: **copilot**, **gemini** (dropped, see Phase 0 results).
 | grok | yes (OpenAI format) | `[model.<name>]` with `base_url` and `api_backend = "chat_completions"`/`responses`/`messages` (grok's custom-models guide) |
 | codex | yes (OpenAI Responses) | `model_providers` with a `base_url` (not tested) |
 | claude | yes, through LiteLLM's Anthropic-format `/v1/messages` | the `claude-proxy` service (works; no Claude-named alias needed because every model variable is set to the proxy model) |
-| agy | yes, through the Gemini-format route | as in `~/workarea/fox/openai-proxy/scripts/agy-proxy.sh`: `modelProvider: "gemini"` in `antigravity-cli/settings.json`, `GEMINI_API_KEY=$LITELLM_MASTER_KEY`, `GOOGLE_GEMINI_BASE_URL=<proxy>`. agy only asks for its own model names, so LiteLLM's `model_group_alias` decides the real model (`gemini-3.8-flash` → `nemotron-3-ultra` today), and `agy_callbacks.py` fixes agy's tool results. `agy_acp_server` respects `GEMINI_API_KEY` + `GOOGLE_GEMINI_BASE_URL` with `auth.type=gemini-api-key` (the `agy-proxy` service; works: Google would reject the LiteLLM key, so a reply means it went through the proxy) |
+| agy | yes, through the Gemini-format route | as in `~/workarea/openai-proxy/scripts/agy-proxy.sh`: `modelProvider: "gemini"` in `antigravity-cli/settings.json`, `GEMINI_API_KEY=$LITELLM_MASTER_KEY`, `GOOGLE_GEMINI_BASE_URL=<proxy>`. agy only asks for its own model names, so LiteLLM's `model_group_alias` decides the real model (`gemini-3.8-flash` → `nemotron-3-ultra` today), and `agy_callbacks.py` fixes agy's tool results. `agy_acp_server` respects `GEMINI_API_KEY` + `GOOGLE_GEMINI_BASE_URL` with `auth.type=gemini-api-key` (the `agy-proxy` service; works: Google would reject the LiteLLM key, so a reply means it went through the proxy) |
 | muse | no | — |
 
 ## Repository layout

@@ -15,6 +15,7 @@
 
 x-locked-agent: &locked-agent
   init: true
+  userns_mode: ${ACP_USERNS:-}     # see compose.yaml
   read_only: true
   cap_drop: [ALL]
   security_opt: ["no-new-privileges:true"]
@@ -24,10 +25,15 @@ x-locked-agent: &locked-agent
   tmpfs:
     - /tmp:exec,mode=1777,size=2g
   networks: [locked]
+  # A resolver that doesn't exist, for outside names. Podman's network DNS (aardvark-dns) forwards outside names even
+  # from an internal network, which would leave DNS as a way out; this makes those lookups fail. Service names
+  # (llm-gateway, egress) are still answered by the engine's own DNS. Docker never forwards from an internal network,
+  # so there it changes nothing.
+  dns: [127.0.0.1]
   depends_on: [llm-gateway, egress]
   volumes:
     # LOCKED_WORKSPACE_MODE=ro gives the agents a read-only view of the folder (review only).
-    - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}:${LOCKED_WORKSPACE_MODE:-rw}
+    - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}:${LOCKED_WORKSPACE_MODE:-rw},z
 
 x-locked-env: &locked-env
   WORKSPACE: ${WORKSPACE:-${HOME}/workarea/tmp}
@@ -44,7 +50,7 @@ x-locked-env: &locked-env
 
 services:
   llm-gateway:
-    image: nginx:1.27-alpine
+    image: docker.io/library/nginx:1.27-alpine
     container_name: acp-llm-gateway
     restart: unless-stopped
     read_only: true
@@ -54,18 +60,18 @@ services:
       LOCKED_LLM_KEY: ${LOCKED_LLM_KEY:-${LITELLM_MASTER_KEY:-}}
       NGINX_ENVSUBST_FILTER: ^LOCKED_
     volumes:
-      - ./locked:/etc/nginx/templates:ro      # nginx renders *.template from here
+      - ./locked:/etc/nginx/templates:ro,z     # nginx renders *.template from here
     # `locked` for the agents; `upstream` reaches the model server (here: the LiteLLM proxy's network).
     networks: [locked, upstream]
 
   egress:
-    image: ubuntu/squid:6.6-24.04_edge
+    image: docker.io/ubuntu/squid:6.6-24.04_edge
     container_name: acp-egress
     restart: unless-stopped
     command: ["-f", "/etc/squid/acp/egress-squid.conf", "-NYC"]
     # The folder, not single files: an edited single-file bind mount can go stale.
     volumes:
-      - ./locked:/etc/squid/acp:ro
+      - ./locked:/etc/squid/acp:ro,z
     networks: [locked, egress-out]
 
   opencode-locked:

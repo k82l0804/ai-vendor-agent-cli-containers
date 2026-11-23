@@ -69,7 +69,10 @@ VS Code ── ACP Client extension
 
 ## Requirements
 
-- Docker with Compose v2 (tested on Docker Desktop 4.x with WSL 2, Docker 29, Compose 5).
+- Docker with Compose v2 (tested on Docker Desktop 4.x with WSL 2, Docker 29, Compose 5), **or rootless Podman**
+  with `podman compose` (tested: Podman 4.9 on Oracle Linux 8.10 under WSL 2, with Docker Compose v2 as the compose
+  provider). The engine is detected automatically (`bin/acp-compose`); set `ACP_ENGINE=docker|podman` to choose. Setup,
+  and what differs under Podman: [docs/podman-install.md](docs/podman-install.md).
 - VS Code (or VS Code Insiders) with the **ACP Client** extension by Jun Han (`formulahendry.acp-client`). In a
   Remote-WSL window it must be installed on the WSL side, where `docker` runs.
 - Node.js on the host, only for `make smoke`.
@@ -159,6 +162,7 @@ In our own runs the agents tried, unprompted, to reach telemetry (PostHog), vend
 
 ```
 bin/acp-connect               what the editor starts: one container per connection, mounting the open folder
+bin/acp-compose               runs compose with Docker or Podman (used by the Makefile, acp-connect and scripts)
 compose.yaml                  one service per agent (normal profile)
 compose.locked.yaml           the locked profile: internal network, gateway, egress proxy, hardened agents
 locked/                       gateway rules, egress policy and allowlist

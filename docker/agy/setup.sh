@@ -1,6 +1,6 @@
 # Sourced by acp-run. AGY_AUTH picks the model source:
 #   subscription: the host's Google sign-in (~/.gemini/antigravity-acp/acp_token.json), mounted read-only at /creds/agy.
-#   proxy:        the local LiteLLM proxy through the Gemini-API route, as ~/workarea/fox/openai-proxy/scripts/agy-proxy.sh
+#   proxy:        the local LiteLLM proxy through the Gemini-API route, as ~/workarea/openai-proxy/scripts/agy-proxy.sh
 #                 does for the agy CLI; LiteLLM's model_group_alias decides which model answers.
 acp_setup() {
   local acp="$HOME/.gemini/antigravity-acp"

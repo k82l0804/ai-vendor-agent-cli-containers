@@ -14,14 +14,17 @@ import { realpathSync } from "node:fs";
 
 const VIA = process.env.ACP_SMOKE_VIA === "connect" ? "connect" : "exec";
 const CLIENT_CWD = process.env.ACP_SMOKE_CWD || process.cwd();
-const CONNECT = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "acp-connect");
+const BIN = join(dirname(fileURLToPath(import.meta.url)), "..", "bin");
+const CONNECT = join(BIN, "acp-connect");
+// docker or podman, as bin/acp-compose decides (ACP_ENGINE overrides).
+const ENGINE = execFileSync(join(BIN, "acp-compose"), ["--engine"]).toString().trim();
 const TURN_TIMEOUT_MS = 180_000;
 
 function connect(agent) {
   // Like the VS Code client: started in the open folder, which it also sends as the session cwd.
   const child = VIA === "connect"
     ? spawn(CONNECT, [agent], { cwd: CLIENT_CWD, stdio: ["pipe", "pipe", "pipe"] })
-    : spawn("docker", ["exec", "-i", `acp-${agent}`, "acp-run"], { cwd: CLIENT_CWD, stdio: ["pipe", "pipe", "pipe"] });
+    : spawn(ENGINE, ["exec", "-i", `acp-${agent}`, "acp-run"], { cwd: CLIENT_CWD, stdio: ["pipe", "pipe", "pipe"] });
   let nextId = 1, buf = "", stderr = "";
   const pending = new Map();
   const stats = { permissionRequests: 0, text: "", toolCalls: 0, otherClientCalls: [] };
@@ -71,13 +74,13 @@ const EXPECTED_DIR = VIA === "connect" && ![homedir(), "/", "/home", "/root"].in
   : (process.env.WORKSPACE || `${homedir()}/workarea/tmp`);
 
 function oneOffContainers() {
-  return execFileSync("docker", ["ps", "-aq", "--filter", "label=com.docker.compose.project=acp",
+  return execFileSync(ENGINE, ["ps", "-aq", "--filter", "label=com.docker.compose.project=acp",
     "--filter", "label=com.docker.compose.oneoff=True"]).toString().trim().split("\n").filter(Boolean).length;
 }
 
 function homesLeft(agent) {
   if (VIA === "connect") return "n/a (container removed)";
-  try { return execFileSync("docker", ["exec", `acp-${agent}`, "sh", "-c", "ls -d /tmp/acp-home.* 2>/dev/null | wc -l"]).toString().trim(); }
+  try { return execFileSync(ENGINE, ["exec", `acp-${agent}`, "sh", "-c", "ls -d /tmp/acp-home.* 2>/dev/null | wc -l"]).toString().trim(); }
   catch { return "?"; }
 }
 

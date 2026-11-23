@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Runs Compose for this project with whichever container engine is installed, so the Makefile, acp-connect and the
+# scripts work the same with Docker and with (rootless) Podman.
+#
+#   acp-compose [--locked] <compose arguments...>    compose.yaml (+ compose.locked.yaml with --locked)
+#   acp-compose --engine                             prints the engine: docker or podman
+#
+# Engine: ACP_ENGINE=docker|podman if set. Otherwise Docker, unless `docker` is missing or is Podman's docker
+# emulation (podman-docker), then Podman.
+# Under Podman, ACP_USERNS=keep-id (compose.yaml: userns_mode) maps your UID into the container unchanged, so files the
+# agents write to the workspace belong to you. Docker leaves ACP_USERNS empty, which changes nothing.
+set -euo pipefail
+here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+
+engine=${ACP_ENGINE:-}
+if [ -z "$engine" ]; then
+  if command -v docker >/dev/null 2>&1 && ! docker --version 2>/dev/null | grep -qi podman; then
+    engine=docker
+  elif command -v podman >/dev/null 2>&1; then
+    engine=podman
+  else
+    echo "acp-compose: neither docker nor podman found" >&2
+    exit 127
+  fi
+fi
+
+if [ "${1:-}" = --engine ]; then
+  echo "$engine"
+  exit 0
+fi
+
+case "$engine" in
+  docker) compose=(docker compose) ;;
+  podman)
+    # `podman compose` runs Docker Compose (or podman-compose) and points it at the Podman socket itself, so
+    # DOCKER_HOST doesn't have to be set (VS Code starts acp-connect without your shell's environment).
+    compose=(podman compose)
+    export ACP_USERNS="${ACP_USERNS-keep-id}"
+    ;;
+  *) echo "acp-compose: ACP_ENGINE must be docker or podman, not '$engine'" >&2; exit 2 ;;
+esac
+
+files=(-f "$here/compose.yaml")
+if [ "${1:-}" = --locked ]; then
+  shift
+  files+=(-f "$here/compose.locked.yaml")
+fi
+
+exec "${compose[@]}" --project-directory "$here" "${files[@]}" "$@"

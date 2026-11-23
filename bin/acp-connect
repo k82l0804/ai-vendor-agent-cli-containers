@@ -13,11 +13,19 @@ case "$dir" in
 esac
 # WORKSPACE in the environment overrides .env, so compose mounts this folder and tells acp-run about it.
 export WORKSPACE="$dir"
-files=(-f "$here/compose.yaml")
+locked=()
 deps=(--no-deps)
 # Locked profile: add its compose file, and let compose start llm-gateway and egress if they aren't running.
 if [[ "$svc" == *-locked ]]; then
-  files+=(-f "$here/compose.locked.yaml")
+  locked=(--locked)
   deps=()
+  # Podman 4.x reports no NetworkID for a container's networks, so Compose sees a change and recreates running
+  # containers on every run/up, which would restart llm-gateway and egress under other open sessions. Start them
+  # only if they aren't running (stdout stays clean for ACP), then leave them alone.
+  if [ "$("$here/bin/acp-compose" --engine)" = podman ]; then
+    "$here/bin/acp-compose" --locked up -d --no-recreate --quiet-pull llm-gateway egress >&2
+    deps=(--no-deps)
+  fi
 fi
-exec docker compose --project-directory "$here" "${files[@]}" run --rm -T "${deps[@]}" --quiet-pull "$svc" acp-run
+# bin/acp-compose picks Docker or Podman.
+exec "$here/bin/acp-compose" "${locked[@]}" run --rm -T "${deps[@]}" --quiet-pull "$svc" acp-run

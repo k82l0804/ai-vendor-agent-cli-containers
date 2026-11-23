@@ -24,8 +24,12 @@ check   "no Linux capabilities (CapEff = 0)"                           grep -q '
 check   "cannot gain privileges (NoNewPrivs = 1)"                      grep -q '^NoNewPrivs:[[:space:]]*1$' /proc/self/status
 refused "root filesystem is read-only"                                 touch /usr/local/.locked-check
 refused "no Docker socket"                                             test -e /var/run/docker.sock
-# Not host data: kernel filesystems, Docker's generated /etc files, the tmpfs, and the docker-init binary (init: true).
-mounts=$(awk '$2 !~ "^/(proc|sys|dev)(/|$)" && $2 !~ "^/etc/(hosts|hostname|resolv.conf)$" && $2 != "/" && $2 != "/tmp" && $2 != "/usr/sbin/docker-init" {print $2}' /proc/mounts | sort -u | tr '\n' ' ')
+# Not host data: kernel filesystems, the engine's generated /etc files, the empty tmpfs mounts (/tmp; Podman also adds
+# /run, /var/tmp and /run/.containerenv to read-only containers), and the init binary (init: true): docker-init or
+# podman-init.
+mounts=$(awk '$2 !~ "^/(proc|sys|dev)(/|$)" && $2 !~ "^/etc/(hosts|hostname|resolv.conf)$" && $2 != "/" \
+  && !($3 == "tmpfs" && $2 ~ "^/(tmp|run|var/tmp|run/[.]containerenv)$") \
+  && $2 != "/usr/sbin/docker-init" && $2 != "/run/podman-init" {print $2}' /proc/mounts | sort -u | tr '\n' ' ')
 check   "only the workspace is mounted from the host (${mounts% })"    test "${mounts% }" = "$WORKSPACE"
 check   "process limit set (pids.max = $(cat /sys/fs/cgroup/pids.max 2>/dev/null))" test "$(cat /sys/fs/cgroup/pids.max 2>/dev/null)" != max
 

@@ -1,15 +1,20 @@
 name: acp
 
 # Every agent: long-running container; each `docker exec -i acp-<agent> acp-run` is one fresh ACP connection.
+# Run it through bin/acp-compose (the Makefile does), which picks Docker or Podman.
+# Bind mounts carry :z, the SELinux shared label (needed on hosts with SELinux enforcing, ignored elsewhere).
 x-agent: &agent
   init: true
+  # Podman only (bin/acp-compose sets ACP_USERNS=keep-id): your UID maps into the container unchanged, so workspace
+  # files stay yours under rootless Podman. Empty under Docker, which changes nothing.
+  userns_mode: ${ACP_USERNS:-}
   restart: unless-stopped
   tmpfs:
     - /tmp:exec,mode=1777,size=4g
   environment:
     WORKSPACE: ${WORKSPACE:-${HOME}/workarea/tmp}
   volumes:
-    - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}
+    - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}:z
 
 x-proxy-env: &proxy-env
   WORKSPACE: ${WORKSPACE:-${HOME}/workarea/tmp}
@@ -32,8 +37,8 @@ services:
     container_name: acp-codex
     build: { context: docker/codex, args: { BASE: acp-base } }
     volumes:
-      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}
-      - ${HOME}/.codex:/creds/codex:ro
+      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}:z
+      - ${HOME}/.codex:/creds/codex:ro,z
 
   grok:
     <<: *agent
@@ -41,8 +46,8 @@ services:
     container_name: acp-grok
     build: { context: docker/grok, args: { BASE: acp-base } }
     volumes:
-      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}
-      - ${HOME}/.grok:/creds/grok:ro
+      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}:z
+      - ${HOME}/.grok:/creds/grok:ro,z
 
   agy:
     <<: *agent
@@ -55,8 +60,8 @@ services:
       # The server's own default on a Google sign-in is gemini-3.8-flash-high.
       AGY_ACP_DEFAULT_MODEL: ${AGY_MODEL:-gemini-4-argon-high}
     volumes:
-      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}
-      - ${HOME}/.gemini:/creds/agy:ro
+      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}:z
+      - ${HOME}/.gemini:/creds/agy:ro,z
 
   muse:
     <<: *agent
@@ -67,10 +72,10 @@ services:
       WORKSPACE: ${WORKSPACE:-${HOME}/workarea/tmp}
       MUSE_MODEL: ${MUSE_MODEL:-}
     volumes:
-      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}
-      - ${HOME}/.config/muse:/creds/muse:ro
+      - ${WORKSPACE:-${HOME}/workarea/tmp}:${WORKSPACE:-${HOME}/workarea/tmp}:z
+      - ${HOME}/.config/muse:/creds/muse:ro,z
 
-  # ---- agents whose model comes from the local LiteLLM proxy (~/workarea/fox/openai-proxy) ----
+  # ---- agents whose model comes from the local LiteLLM proxy (~/workarea/openai-proxy) ----
 
   claude-proxy:
     <<: *agent
