@@ -268,7 +268,11 @@ Verified on Oracle Linux 8.10 under WSL 2 (rootless Podman 4.9.4, Docker Compose
 - `make build`
 - `make locked-check`: all checks pass
 - `make locked-smoke`: all 7 locked agents
-- `make smoke` for `claude` and the 7 proxy agents
+- `make smoke`: all 12 agents, including the subscription agents with their host logins
 
-Not yet verified: the subscription agents `codex`, `grok`, `muse` and `agy` (they need their host logins), and a real
-(non-WSL) EL8 host with SELinux enforcing and cgroups v1 (see the table above).
+Not yet verified: a real (non-WSL) EL8 host with SELinux enforcing and cgroups v1 (see the table above).
+
+Logins are per WSL distribution: each has its own home folder, so a login made in another distribution (e.g. Ubuntu)
+isn't seen here. Run `codex login`, `grok login` and `muse login` in this one. agy's container reads
+`~/.gemini/antigravity-acp/acp_token.json`, which is written by Google's ACP server (`agy-acp-server`) when you
+connect to it once from the ACP Client and sign in, not by the `agy` CLI.
