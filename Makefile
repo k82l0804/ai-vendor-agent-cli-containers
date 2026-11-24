@@ -25,13 +25,17 @@ ca-certs:
 base:
 	$(ENGINE) build --build-arg UID=$(UID) --build-arg GID=$(GID) -t acp-base docker/base
 
+# The *-proxy services have no build of their own: they run the image of the agent without the suffix
+# (agy-proxy runs acp-agy), so build that one.
+BUILD_AGENTS = $(sort $(patsubst %-proxy,%,$(AGENTS)))
+
 build: base
-	$(COMPOSE) build $(AGENTS)
+	$(COMPOSE) build $(BUILD_AGENTS)
 
 # Fresh latest CLIs: no layer cache, newest node base.
 rebuild:
 	$(ENGINE) build --pull --no-cache --build-arg UID=$(UID) --build-arg GID=$(GID) -t acp-base docker/base
-	$(COMPOSE) build --no-cache $(AGENTS)
+	$(COMPOSE) build --no-cache $(BUILD_AGENTS)
 
 PROXY_NET := openai-proxy_default
 
