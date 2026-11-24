@@ -70,9 +70,11 @@ VS Code ── ACP Client extension
 ## Requirements
 
 - Docker with Compose v2 (tested on Docker Desktop 4.x with WSL 2, Docker 29, Compose 5), **or rootless Podman**
-  with `podman compose` (tested: Podman 4.9 on Oracle Linux 8.10 under WSL 2, with Docker Compose v2 as the compose
-  provider). The engine is detected automatically (`bin/acp-compose`); set `ACP_ENGINE=docker|podman` to choose. Setup,
-  and what differs under Podman: [docs/podman-install.md](docs/podman-install.md).
+  with `podman compose` (tested: Podman 4.9 on Oracle Linux 8.10, both under WSL 2 and on a real VM with SELinux
+  enforcing, with Docker Compose v2 as the compose provider). The engine is detected automatically
+  (`bin/acp-compose`); set `ACP_ENGINE=docker|podman` to choose. Setup: [docs/podman-install-ol8.md](docs/podman-install-ol8.md)
+  on an Oracle Linux 8 server or VM, [docs/podman-install.md](docs/podman-install.md) on WSL 2 (and what differs
+  under Podman).
 - VS Code (or VS Code Insiders) with the **ACP Client** extension by Jun Han (`formulahendry.acp-client`). In a
   Remote-WSL window it must be installed on the WSL side, where `docker` runs.
 - Node.js on the host, only for `make smoke`.
@@ -171,6 +173,7 @@ docker/<agent>/               Dockerfile + setup.sh (that agent's config, creden
 docker/muse/muse-acp.mjs      ACP adapter for Muse, on Meta's @muse-code/sdk
 scripts/acp-smoke.mjs         ACP smoke test
 scripts/locked-check*.sh      locked profile verification
+scripts/ol8-host-setup.sh     root setup for rootless Podman on an Oracle Linux 8 server or VM
 docs/SECURITY.md              security design for reviewers
 docs/SPEC.md                  design notes and per-agent findings
 ```

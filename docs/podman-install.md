@@ -11,6 +11,10 @@ misleading errors on WSL.
 Tested with: Oracle Linux 8.10 (WSL 2, kernel 6.18), Podman 4.9.4 (`container-tools:ol8` module), netavark,
 Docker Compose v5.8.0, Node.js 22.
 
+> **On a real Oracle Linux 8 server or VM (not WSL), follow [podman-install-ol8.md](podman-install-ol8.md)
+> instead.** It is a complete, verified procedure with a setup script. This file stays the reference for *why* each
+> setting is needed.
+
 ## 1. sudo without a password (optional)
 
 Only needed if an automated assistant does the setup; skip it if you type the commands yourself.
@@ -224,23 +228,10 @@ podman run --rm --cpus 0.5 --memory 64m --pids-limit 50 docker.io/library/alpine
 
 ## On a real OS (bare metal or VM) instead of WSL
 
-The steps above were run on WSL 2. On a normal Oracle Linux 8 / RHEL 8 install, most of them are the same. These are
-the differences, step by step. They come from how the two environments differ and **have not been tested on a non-WSL
-machine yet**.
-
-| Step | WSL 2 | Real OL8 / RHEL 8 |
-|---|---|---|
-| 2. Packages | as written | Same. If Docker Engine (`docker-ce`, `moby-engine`) is installed, remove it: `podman-docker` conflicts with it, and two engines on one host make it unclear which one ran a container. |
-| 3. `newuidmap` capabilities | Lost by the WSL root filesystem; fix with `rpm --setcaps` | Normally intact. Just check `getcap /usr/bin/newuidmap` and run the fix only if it prints nothing. |
-| 4. netavark | Needed | Still needed on EL8: Podman 4.x picks CNI when CNI plugins are installed. (EL9 and Fedora default to netavark.) |
-| cgroups v2 | Already v2 (the WSL kernel) | **EL8 boots on cgroups v1.** Rootless Podman then can't apply the locked profile's `mem_limit`, `cpus` and `pids_limit`. Switch to v2: `sudo grubby --update-kernel=ALL --args=systemd.unified_cgroup_hierarchy=1`, then reboot. Check with `stat -fc %T /sys/fs/cgroup`, which should print `cgroup2fs`. |
-| cgroup delegation | See step 8 | The same drop-in as in step 8 (below), so that rootless containers can be given CPU and I/O limits. |
-| SELinux | Not present on WSL | **Enforcing by default.** Containers can't read bind-mounted folders under `$HOME` until those folders are relabelled. The compose files need `:z` on workspace and credential mounts, or `security_opt: [label=disable]`. The podman-support branch handles this; see *Differences under Podman* below. |
-| 6. `/etc/wsl.conf` | Required | **Skip.** systemd is already PID 1, `/` is already a shared mount, and there is no Windows PATH. |
-| 7. Restart | `wsl --terminate` | Not needed (except a reboot after the cgroups v2 change). |
-| 8. User services | as written | Log in as the user directly (console, SSH, or `machinectl shell $USER@`). `sudo su - user` gives no `XDG_RUNTIME_DIR` and no user systemd instance, so `systemctl --user` and the socket fail. |
-| Firewall | none | firewalld is fine with netavark for container-to-container traffic. Open port 8000 only if other machines should reach openai-proxy: `sudo firewall-cmd --add-port=8000/tcp --permanent && sudo firewall-cmd --reload`. |
-| VS Code | Remote-WSL window | Remote-SSH window (or local). The ACP Client extension must run on the machine where `podman` runs. |
+See [podman-install-ol8.md](podman-install-ol8.md): the full procedure, verified on Oracle Linux 8.10 in a Hyper-V VM
+with SELinux enforcing. In short, compared with the WSL steps above: step 3 is usually not needed, steps 6 and 7 are
+skipped, and two things are added: cgroups v2 (EL8 boots on v1; a kernel argument and a reboot) and `:z` on every bind
+mount for SELinux. Log in as the user directly (SSH or console), not with `su`, or there is no `systemctl --user`.
 
 ## 10. Build and run the project
 
@@ -270,7 +261,9 @@ Verified on Oracle Linux 8.10 under WSL 2 (rootless Podman 4.9.4, Docker Compose
 - `make locked-smoke`: all 7 locked agents
 - `make smoke`: all 12 agents, including the subscription agents with their host logins
 
-Not yet verified: a real (non-WSL) EL8 host with SELinux enforcing and cgroups v1 (see the table above).
+Also verified on a real Oracle Linux 8.10 VM (Hyper-V, SELinux enforcing, switched to cgroups v2), on 2026-11-24:
+all 12 agents in `make smoke` (through `bin/acp-connect`), `make locked-check` (120/120) and `make locked-smoke` (7/7).
+See [podman-install-ol8.md](podman-install-ol8.md).
 
 Logins are per WSL distribution: each has its own home folder, so a login made in another distribution (e.g. Ubuntu)
 isn't seen here. Run `codex login`, `grok login` and `muse login` in this one. agy's container reads

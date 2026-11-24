@@ -19,6 +19,7 @@ findings, and `docs/SECURITY.md` covers the locked profile.
 | `scripts/acp-smoke.mjs` | ACP smoke test (`make smoke`, `make locked-smoke`). |
 | `scripts/locked-check*.sh` | Checks the locked profile's controls from inside each locked container (`make locked-check`). |
 | `docs/podman-install.md` | Host setup for rootless Podman (OL8 / WSL 2) and what differs under Podman. |
+| `docs/podman-install-ol8.md`, `scripts/ol8-host-setup.sh` | Host setup on a real Oracle Linux 8 server or VM (SELinux enforcing, cgroups v2): the verified step-by-step procedure and its root script. |
 
 ## Rules
 
