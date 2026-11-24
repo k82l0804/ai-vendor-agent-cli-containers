@@ -65,10 +65,35 @@ stat -fc %T /sys/fs/cgroup                         # cgroup2fs
 cat /sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/cgroup.controllers
                                                    # cpuset cpu io memory pids
 getenforce                                         # Enforcing is fine
+echo $DBUS_SESSION_BUS_ADDRESS                     # unix:path=/run/user/<uid>/bus, or empty
 ```
 
-Podman 4.x on EL8 uses CNI when CNI plugins are installed. Switch to netavark **before any containers exist**
-(`system reset` deletes all containers, images and networks):
+**Check the D-Bus address over SSH, not only in a desktop terminal.** Rootless Podman asks your user's systemd, over
+D-Bus, for a scope per container. Some sites set `DBUS_SESSION_BUS_ADDRESS` in a login script (seen at work:
+`/etc/profile.d/ssh-x-forward.sh`/`.csh`, for SSH X forwarding) to a `unix:abstract=/tmp/dbus-…` bus that has no
+systemd behind it. `podman run` then fails over SSH, and so over VS Code Remote-SSH, with `unable to start unit …
+Interactive authentication required`, while the same command works in a desktop terminal. If the address is
+anything other than your user bus, add this to the **end** of `~/.bashrc` (after `/etc/profile.d` has run), then log in
+again:
+
+```bash
+systemctl --user enable --now dbus.socket          # the user bus, also without a desktop login
+cat >> ~/.bashrc <<'EOF'
+# Podman needs the systemd user bus; a site login script may point SSH logins at an X-forwarding bus instead.
+if [ -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]; then
+  export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+fi
+EOF
+```
+
+`~/.bash_profile` must source `~/.bashrc` (it does by default on OL8). Don't answer the polkit prompt with sudo or a
+smartcard PIN instead: that would create the container's scope in the *system* systemd, which isn't rootless any more.
+
+Podman 4.x on EL8 uses CNI when CNI plugins are installed. Switch to netavark **before any containers exist**.
+`system reset` deletes all of *your* rootless containers, images, volumes and networks (other users' aren't
+touched); on a server where you already use Podman, check `podman ps -a`, `podman images` and `podman volume ls`
+first, and if anything there matters, run `podman system migrate` after writing `containers.conf` instead of the
+reset.
 
 ```bash
 mkdir -p ~/.config/containers
@@ -182,6 +207,8 @@ with it. `bin/acp-connect` never mounts `/`, `/home`, `/root` or your home folde
 | openai-proxy never gets healthy; `podman logs openai-proxy-llm-proxy-1` shows `Exception: Config file not found: /app/config.yaml` | SELinux denies the container access to the mounted config. Its mounts need `:z` (`openai-proxy` `podman-support` branch, `docker-compose.yml`). Any other bind mount you add needs `:z` too. |
 | `make build` fails with `copying system image ... parsing image configuration ... EOF` | Docker Hub's CDN dropped the download. Pull the base image until it succeeds, then rerun: `until podman pull docker.io/library/node:22-bookworm-slim; do sleep 5; done; make build` |
 | `systemctl --user` fails with `Failed to connect to bus` | You switched user with `su`/`sudo -u`. Log in as the user directly. |
+| `podman run` fails over SSH with `runc create failed: … unable to apply cgroup configuration: unable to start unit … Interactive authentication required`, but works in a desktop terminal | `DBUS_SESSION_BUS_ADDRESS` points at a bus without systemd (a site login script for X forwarding, `unix:abstract=/tmp/dbus-…`), so runc falls back to the system bus and polkit refuses. Point it at your user bus in `~/.bashrc`: section 3. |
+| `cat …/user@<uid>.service/cgroup.controllers`: no such file | Check for typos first, then use the path systemd reports: `cat /sys/fs/cgroup$(systemctl show user@$(id -u).service -p ControlGroup --value)/cgroup.controllers`. If `systemctl is-active user@$(id -u).service` isn't `active`, you have no systemd user session (see the row above). |
 | `podman info` shows `cgroupfs v1` | The reboot after the setup script hasn't happened, or the grub change didn't apply: `sudo grubby --info=DEFAULT \| grep unified`. |
 | `podman info` shows `cni` | Step 3's `containers.conf` is missing. |
 | `runc create failed: user namespaces enabled, but no mapping found for uid 0` on the first `make up` | Two services sharing an image race on Podman's first keep-id copy. Run `make up` again. |
