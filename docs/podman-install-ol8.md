@@ -31,6 +31,8 @@ What a real OL8 host needs that WSL doesn't (or the reverse):
   `registry.npmjs.org`, and each vendor's install and API hosts. If the server reaches the internet through an HTTP
   proxy, set `http_proxy`/`https_proxy`/`no_proxy` for dnf, curl and Podman before you start (not verified here; Podman
   passes these variables into builds by default).
+- **TLS inspection.** If the network re-signs HTTPS with a company root CA (common at work), the server trusts it but
+  the images don't, and `make build` fails in the npm and curl steps with certificate errors. Section 6 covers it.
 - An OpenRouter key (or other provider key) for openai-proxy; a Claude subscription for `claude`; the vendor
   subscriptions for the other vendor agents you want.
 
@@ -146,8 +148,20 @@ cp .env.example .env && chmod 600 .env
 sed -i "s|^LITELLM_MASTER_KEY=.*|$(grep '^LITELLM_MASTER_KEY=' ../openai-proxy/.env)|" .env
 # CLAUDE_CODE_OAUTH_TOKEN: run `claude setup-token` (on any machine with Claude Code) and paste the token into .env
 mkdir -p ~/workarea/tmp                            # default workspace when no folder is open
+make ca-certs                                      # only on a network with TLS inspection (see below)
 make build                                         # about 7 GB of images; the first run takes a while
 ```
+
+**Networks with TLS inspection.** `make ca-certs` copies the CAs your site added to this server's trust store
+(`/etc/pki/ca-trust/source/anchors`, converted to PEM) into `docker/base/certs/` (git-ignored). The base image adds
+them to Debian's trust store and points Node (`NODE_EXTRA_CA_CERTS`), OpenSSL/curl (`SSL_CERT_FILE`) and Python
+(`REQUESTS_CA_BUNDLE`) at it, so every agent trusts them while it is built and while it runs. If `make ca-certs` finds
+nothing, ask IT for the root CA as a PEM file and put it in `docker/base/certs/` yourself. After adding or changing a
+CA, run `make rebuild` (the base image changes, so every agent image is rebuilt). Without files there, the images are
+the same as before.
+
+To see which CA a site re-signs with, from the server: `openssl s_client -connect registry.npmjs.org:443 -showcerts
+</dev/null 2>/dev/null | grep -E '^ *[0-9]* *[si]:'` (an issuer that isn't a public CA is the inspection CA).
 
 ## 7. Test the agents that need no vendor login
 
@@ -206,6 +220,7 @@ with it. `bin/acp-connect` never mounts `/`, `/home`, `/root` or your home folde
 |---|---|
 | openai-proxy never gets healthy; `podman logs openai-proxy-llm-proxy-1` shows `Exception: Config file not found: /app/config.yaml` | SELinux denies the container access to the mounted config. Its mounts need `:z` (`openai-proxy` `podman-support` branch, `docker-compose.yml`). Any other bind mount you add needs `:z` too. |
 | `make build` fails with `copying system image ... parsing image configuration ... EOF` | Docker Hub's CDN dropped the download. Pull the base image until it succeeds, then rerun: `until podman pull docker.io/library/node:22-bookworm-slim; do sleep 5; done; make build` |
+| `make build`: npm fails with `SELF_SIGNED_CERT_IN_CHAIN` / `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`, or curl with `SSL certificate problem` (exit 60) | The network inspects TLS with a company CA that the images don't trust. `make ca-certs` (or put the CA's PEM in `docker/base/certs/`), then `make rebuild`: section 6. Don't turn off verification (`strict-ssl false`, `curl -k`). |
 | `systemctl --user` fails with `Failed to connect to bus` | You switched user with `su`/`sudo -u`. Log in as the user directly. |
 | `podman run` fails over SSH with `runc create failed: … unable to apply cgroup configuration: unable to start unit … Interactive authentication required`, but works in a desktop terminal | `DBUS_SESSION_BUS_ADDRESS` points at a bus without systemd (a site login script for X forwarding, `unix:abstract=/tmp/dbus-…`), so runc falls back to the system bus and polkit refuses. Point it at your user bus in `~/.bashrc`: section 3. |
 | `cat …/user@<uid>.service/cgroup.controllers`: no such file | Check for typos first, then use the path systemd reports: `cat /sys/fs/cgroup$(systemctl show user@$(id -u).service -p ControlGroup --value)/cgroup.controllers`. If `systemctl is-active user@$(id -u).service` isn't `active`, you have no systemd user session (see the row above). |

@@ -153,6 +153,7 @@ In our own runs the agents tried, unprompted, to reach telemetry (PostHog), vend
 | Target | Does |
 |--------|------|
 | `build` / `rebuild` | Build the images (`rebuild`: no cache, newest CLIs) |
+| `ca-certs` | Copy the extra root CAs this host trusts into `docker/base/certs/`, for networks that inspect TLS (then `make rebuild`) |
 | `smoke [A=agent]` | ACP session test: initialize, a prompt, a shell command; checks auto-approve and clean-up |
 | `client-config` | VS Code `acp.agents` block for the normal profile |
 | `up` / `down` / `restart` / `ps` / `logs` / `shell A=agent` / `versions` | Long-running containers (optional; `docker exec` access with a fixed workspace) |
@@ -174,6 +175,7 @@ docker/muse/muse-acp.mjs      ACP adapter for Muse, on Meta's @muse-code/sdk
 scripts/acp-smoke.mjs         ACP smoke test
 scripts/locked-check*.sh      locked profile verification
 scripts/ol8-host-setup.sh     root setup for rootless Podman on an Oracle Linux 8 server or VM
+scripts/ca-from-host.sh       make ca-certs: the host's extra root CAs -> docker/base/certs/
 docs/SECURITY.md              security design for reviewers
 docs/SPEC.md                  design notes and per-agent findings
 ```

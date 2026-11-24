@@ -9,7 +9,7 @@ ENGINE := $(shell bin/acp-compose --engine)
 COMPOSE := bin/acp-compose
 LOCKED_COMPOSE := bin/acp-compose --locked
 
-.PHONY: help base build rebuild up down restart ps logs shell smoke versions client-config prune clean \
+.PHONY: help ca-certs base build rebuild up down restart ps logs shell smoke versions client-config prune clean \
 	locked-build locked-up locked-down locked-check locked-smoke locked-logs locked-client-config
 
 help:
@@ -17,6 +17,10 @@ help:
 	@echo "locked profile: make locked-build | locked-up | locked-check | locked-smoke | locked-logs | locked-client-config | locked-down"
 	@echo "AGENTS='$(AGENTS)'"
 	@echo "LOCKED_AGENTS='$(LOCKED_AGENTS)'"
+
+# Extra root CAs this host trusts -> docker/base/certs/ (networks that inspect TLS). Then: make rebuild
+ca-certs:
+	scripts/ca-from-host.sh
 
 base:
 	$(ENGINE) build --build-arg UID=$(UID) --build-arg GID=$(GID) -t acp-base docker/base

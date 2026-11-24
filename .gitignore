@@ -1,2 +1,4 @@
 .env
 skills/
+docker/base/certs/*.crt
+docker/base/certs/*.pem
